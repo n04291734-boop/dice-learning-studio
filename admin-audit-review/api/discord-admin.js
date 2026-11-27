@@ -12,18 +12,37 @@ async function execute(interaction) {
   const id = args.id;
   const account = args.user;
   const validAccount = typeof account === 'string' && /^\d{16,20}$/.test(account);
-  const accountLabel = value => typeof value === 'string' && /^\d{16,20}$/.test(value) ? '<@' + value + '> (admin linked)' : 'Unknown Discord account';
   const page = args.page ?? 1;
   const validPage = Number.isSafeInteger(page) && page >= 1 && page <= 100000;
   function auditEmbed(title, total, rows, now) {
-    return {title, color: 0xB56CFF, description: 'Private administrator audit · page ' + page + ' of ' + Math.ceil(total/5),
-      fields: rows.map(([keyId,raw,bound]) => {
-        const record = JSON.parse(raw), state = status(record,now);
-        const redemption = Number(bound) === 1 ? 'Browser registered' : record.redeemedObservedAt ? 'Previously observed; not registered now' : 'No recorded redemption';
-        return {name: (state === 'Revoked' ? '🔴 ' : state === 'Expired' ? '🟡 ' : '🟢 ') + state,
-          value: accountLabel(record.adminOwner) + '\n' + redemption + '\nKey ID: ' + keyId};
+    return {
+      title: '🔑 ' + title,
+      color: 0xB56CFF,
+      description: 'Private administrator audit · page ' + page + ' of ' + Math.ceil(total / 5),
+      fields: rows.map(([keyId, raw, bound]) => {
+        const record = JSON.parse(raw);
+        const state = status(record, now);
+        const registered = Number(bound) === 1;
+        const linked = typeof record.adminOwner === 'string' && /^\d{16,20}$/.test(record.adminOwner);
+        const redemption = registered ? 'Browser registered'
+          : record.redeemedObservedAt ? 'Previously registered' : 'No recorded redemption';
+        const headline = state === 'Revoked' ? '🔴 Revoked'
+          : state === 'Expired' ? '🟡 Expired'
+          : registered ? '🟢 Browser registered' : '⚪ ' + redemption;
+        const lines = [
+          headline,
+          'Account association: ' + (linked ? 'Admin linked' : 'Unknown'),
+        ];
+        if (state !== 'Active') lines.push(redemption);
+        lines.push('Key ID: ' + keyId);
+
+        return {
+          name: '\u200b',
+          value: '**' + (linked ? '<@' + record.adminOwner + '>' : 'Unknown account') + '**\n' + lines.join('\n'),
+        };
       }),
-      footer:{text:'Browser registration is evidence of key use, not verified Discord identity. Full access keys are never shown.'}};
+      footer: {text: 'Browser registration alone cannot verify Discord identity. Use the key ID for revocation.'},
+    };
   }
   if (name === 'redeemed') {
     if (!validPage) return 'Enter a valid page.';
